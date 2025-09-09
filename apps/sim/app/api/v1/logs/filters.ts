@@ -3,14 +3,13 @@ import { workflow, workflowExecutionLogs } from '@/db/schema'
 
 export interface LogFilters {
   workspaceId: string
-  userId: string
   workflowIds?: string[]
   folderIds?: string[]
   triggers?: string[]
   level?: 'info' | 'error'
   startDate?: Date
   endDate?: Date
-  search?: string
+  executionId?: string
   minDurationMs?: number
   maxDurationMs?: number
   minCost?: number
@@ -73,9 +72,8 @@ export function buildLogFilters(filters: LogFilters): SQL<unknown> {
   }
 
   // Search filter (execution ID)
-  if (filters.search) {
-    const searchTerm = `%${filters.search}%`
-    conditions.push(sql`${workflowExecutionLogs.executionId} ILIKE ${searchTerm}`)
+  if (filters.executionId) {
+    conditions.push(eq(workflowExecutionLogs.executionId, filters.executionId))
   }
 
   // Duration filters
