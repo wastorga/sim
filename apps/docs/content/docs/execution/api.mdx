@@ -492,7 +492,7 @@ app.post('/sim-webhook', (req, res) => {
   const signature = req.headers['sim-signature'];
   const body = JSON.stringify(req.body);
   
-  if (!verifySignature(body, signature, process.env.WEBHOOK_SECRET)) {
+  if (!verifyWebhookSignature(body, signature, process.env.WEBHOOK_SECRET)) {
     return res.status(401).send('Invalid signature');
   }
   
