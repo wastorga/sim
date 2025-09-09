@@ -28,8 +28,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui'
 import { createLogger } from '@/lib/logs/console/logger'
+import type {
+  LogLevel as StoreLogLevel,
+  TriggerType as StoreTriggerType,
+} from '@/stores/logs/filters/types'
 
 const logger = createLogger('WebhookSettings')
+
+type NotificationLogLevel = Exclude<StoreLogLevel, 'all'>
+type NotificationTrigger = Exclude<StoreTriggerType, 'all'>
 
 interface WebhookConfig {
   id: string
@@ -38,8 +45,8 @@ interface WebhookConfig {
   includeTraceSpans: boolean
   includeRateLimits: boolean
   includeUsageData: boolean
-  levelFilter: string[]
-  triggerFilter: string[]
+  levelFilter: NotificationLogLevel[]
+  triggerFilter: NotificationTrigger[]
   active: boolean
   createdAt: string
   updatedAt: string
@@ -60,7 +67,18 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
   const [editingWebhookId, setEditingWebhookId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<string>('webhooks')
 
-  const [newWebhook, setNewWebhook] = useState({
+  interface EditableWebhookPayload {
+    url: string
+    secret: string
+    includeFinalOutput: boolean
+    includeTraceSpans: boolean
+    includeRateLimits: boolean
+    includeUsageData: boolean
+    levelFilter: NotificationLogLevel[]
+    triggerFilter: NotificationTrigger[]
+  }
+
+  const [newWebhook, setNewWebhook] = useState<EditableWebhookPayload>({
     url: '',
     secret: '',
     includeFinalOutput: false,
@@ -237,7 +255,19 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
     try {
       setIsCreating(true)
-      const updateData: any = {
+      interface UpdateWebhookPayload {
+        url: string
+        includeFinalOutput: boolean
+        includeTraceSpans: boolean
+        includeRateLimits: boolean
+        includeUsageData: boolean
+        levelFilter: NotificationLogLevel[]
+        triggerFilter: NotificationTrigger[]
+        secret?: string
+        active?: boolean
+      }
+
+      let updateData: UpdateWebhookPayload = {
         url: newWebhook.url,
         includeFinalOutput: newWebhook.includeFinalOutput,
         includeTraceSpans: newWebhook.includeTraceSpans,
@@ -249,7 +279,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
       // Only include secret if it was changed
       if (newWebhook.secret) {
-        updateData.secret = newWebhook.secret
+        updateData = { ...updateData, secret: newWebhook.secret }
       }
 
       const response = await fetch(`/api/workflows/${workflowId}/log-webhook/${editingWebhookId}`, {
@@ -276,7 +306,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-3xl max-h-[85vh] flex flex-col'>
+      <DialogContent className='flex max-h-[85vh] max-w-3xl flex-col'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             <Webhook className='h-5 w-5' />
@@ -289,7 +319,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
         <Tabs
           value={editingWebhookId ? 'create' : activeTab}
-          className='mt-4 flex-1 flex flex-col min-h-0'
+          className='mt-4 flex min-h-0 flex-1 flex-col'
           onValueChange={(value) => {
             setActiveTab(value)
             if (value === 'webhooks') {
@@ -305,14 +335,14 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value='webhooks' className='flex flex-col flex-1 min-h-0 overflow-hidden'>
-            <div className='flex-1 min-h-[600px] overflow-y-auto pr-2'>
+          <TabsContent value='webhooks' className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+            <div className='min-h-[600px] flex-1 overflow-y-auto pr-2'>
               {isLoading ? (
-                <div className='h-full flex items-center justify-center'>
+                <div className='flex h-full items-center justify-center'>
                   <RefreshCw className='h-5 w-5 animate-spin text-muted-foreground' />
                 </div>
               ) : webhooks.length === 0 ? (
-                <div className='h-full flex items-center justify-center'>
+                <div className='flex h-full items-center justify-center'>
                   <Card className='w-full'>
                     <CardContent className='flex flex-col items-center justify-center py-8'>
                       <Bell className='mb-3 h-8 w-8 text-muted-foreground' />
@@ -435,8 +465,8 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
             </div>
           </TabsContent>
 
-          <TabsContent value='create' className='flex flex-col flex-1 min-h-0 overflow-hidden'>
-            <div className='flex-1 min-h-[600px] overflow-y-auto pr-2'>
+          <TabsContent value='create' className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+            <div className='min-h-[600px] flex-1 overflow-y-auto pr-2'>
               <div className='space-y-4 pb-6'>
                 <div>
                   <Label htmlFor='url'>Webhook URL</Label>
@@ -499,7 +529,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           }
                         }}
                       />
-                      <Label htmlFor='level-info' className='text-sm font-normal'>
+                      <Label htmlFor='level-info' className='font-normal text-sm'>
                         Info
                       </Label>
                     </div>
@@ -521,7 +551,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           }
                         }}
                       />
-                      <Label htmlFor='level-error' className='text-sm font-normal'>
+                      <Label htmlFor='level-error' className='font-normal text-sm'>
                         Error
                       </Label>
                     </div>
@@ -531,7 +561,9 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                 <div className='space-y-3'>
                   <Label>Filter by Trigger</Label>
                   <div className='grid grid-cols-3 gap-3'>
-                    {['api', 'webhook', 'schedule', 'manual', 'chat'].map((trigger) => (
+                    {(
+                      ['api', 'webhook', 'schedule', 'manual', 'chat'] as NotificationTrigger[]
+                    ).map((trigger) => (
                       <div key={trigger} className='flex items-center gap-2'>
                         <Checkbox
                           id={`trigger-${trigger}`}
@@ -554,7 +586,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                         />
                         <Label
                           htmlFor={`trigger-${trigger}`}
-                          className='text-sm font-normal capitalize'
+                          className='font-normal text-sm capitalize'
                         >
                           {trigger}
                         </Label>
@@ -576,7 +608,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           setNewWebhook({ ...newWebhook, includeFinalOutput: !!checked })
                         }
                       />
-                      <Label htmlFor='include-output' className='text-sm font-normal'>
+                      <Label htmlFor='include-output' className='font-normal text-sm'>
                         Final output
                       </Label>
                     </div>
@@ -588,7 +620,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           setNewWebhook({ ...newWebhook, includeTraceSpans: !!checked })
                         }
                       />
-                      <Label htmlFor='include-spans' className='text-sm font-normal'>
+                      <Label htmlFor='include-spans' className='font-normal text-sm'>
                         Trace spans (detailed execution steps)
                       </Label>
                     </div>
@@ -600,7 +632,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           setNewWebhook({ ...newWebhook, includeRateLimits: !!checked })
                         }
                       />
-                      <Label htmlFor='include-rate-limits' className='text-sm font-normal'>
+                      <Label htmlFor='include-rate-limits' className='font-normal text-sm'>
                         Rate limits (workflow execution limits)
                       </Label>
                     </div>
@@ -612,7 +644,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           setNewWebhook({ ...newWebhook, includeUsageData: !!checked })
                         }
                       />
-                      <Label htmlFor='include-usage-data' className='text-sm font-normal'>
+                      <Label htmlFor='include-usage-data' className='font-normal text-sm'>
                         Usage data (billing period cost and limits)
                       </Label>
                     </div>
@@ -622,7 +654,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                   </p>
                 </div>
 
-                <div className='pt-4 border-t'>
+                <div className='border-t pt-4'>
                   {editingWebhookId && (
                     <Button
                       variant='outline'

@@ -161,8 +161,9 @@ export const logsWebhookDelivery = task({
       if ((subscription.includeRateLimits || subscription.includeUsageData) && log.executionData) {
         const executionData = log.executionData as any
 
-        if (subscription.includeRateLimits && executionData.includeRateLimits) {
-          // Fetch actual rate limits for the workflow owner
+        const needsRateLimits = subscription.includeRateLimits && executionData.includeRateLimits
+        const needsUsage = subscription.includeUsageData && executionData.includeUsageData
+        if (needsRateLimits || needsUsage) {
           const { getUserLimits } = await import('@/app/api/v1/logs/meta')
           const workflow = await db
             .select()
@@ -173,28 +174,14 @@ export const logsWebhookDelivery = task({
           if (workflow.length > 0) {
             try {
               const limits = await getUserLimits(workflow[0].userId)
-              payload.data.rateLimits = limits.workflowExecutionRateLimit
+              if (needsRateLimits) {
+                payload.data.rateLimits = limits.workflowExecutionRateLimit
+              }
+              if (needsUsage) {
+                payload.data.usage = limits.usage
+              }
             } catch (error) {
-              logger.warn('Failed to fetch rate limits for webhook', { error })
-            }
-          }
-        }
-
-        if (subscription.includeUsageData && executionData.includeUsageData) {
-          // Fetch actual usage data for the workflow owner
-          const { getUserLimits } = await import('@/app/api/v1/logs/meta')
-          const workflow = await db
-            .select()
-            .from(workflowTable)
-            .where(eq(workflowTable.id, log.workflowId))
-            .limit(1)
-
-          if (workflow.length > 0) {
-            try {
-              const limits = await getUserLimits(workflow[0].userId)
-              payload.data.usage = limits.usage
-            } catch (error) {
-              logger.warn('Failed to fetch usage data for webhook', { error })
+              logger.warn('Failed to fetch limits/usage for webhook', { error })
             }
           }
         }

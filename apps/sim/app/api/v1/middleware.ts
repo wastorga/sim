@@ -83,6 +83,10 @@ export function createRateLimitResponse(result: RateLimitResult): NextResponse {
     'X-RateLimit-Reset': result.resetAt.toISOString(),
   }
 
+  if (result.error) {
+    return NextResponse.json({ error: result.error || 'Unauthorized' }, { status: 401, headers })
+  }
+
   if (!result.allowed) {
     return NextResponse.json(
       {
@@ -100,5 +104,5 @@ export function createRateLimitResponse(result: RateLimitResult): NextResponse {
     )
   }
 
-  return NextResponse.json({ error: result.error || 'Unauthorized' }, { status: 401, headers })
+  return NextResponse.json({ error: 'Bad request' }, { status: 400, headers })
 }

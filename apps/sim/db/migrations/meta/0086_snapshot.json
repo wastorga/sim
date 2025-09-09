@@ -1,5 +1,5 @@
 {
-  "id": "5fca19de-247c-48d0-83ab-da536aaa6a4e",
+  "id": "0eb39f57-62ea-4252-89b9-56bb35888885",
   "prevId": "563ccace-aa60-4c89-bc09-2a8102916d12",
   "version": "7",
   "dialect": "postgresql",
@@ -5696,9 +5696,11 @@
         },
         "status": {
           "name": "status",
-          "type": "text",
+          "type": "webhook_delivery_status",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'pending'"
         },
         "attempts": {
           "name": "attempts",
@@ -6326,6 +6328,11 @@
       "name": "permission_type",
       "schema": "public",
       "values": ["admin", "write", "read"]
+    },
+    "public.webhook_delivery_status": {
+      "name": "webhook_delivery_status",
+      "schema": "public",
+      "values": ["pending", "success", "failed"]
     },
     "public.workspace_invitation_status": {
       "name": "workspace_invitation_status",

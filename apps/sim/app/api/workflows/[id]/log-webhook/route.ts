@@ -62,6 +62,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         url: workflowLogWebhook.url,
         includeFinalOutput: workflowLogWebhook.includeFinalOutput,
         includeTraceSpans: workflowLogWebhook.includeTraceSpans,
+        includeRateLimits: workflowLogWebhook.includeRateLimits,
+        includeUsageData: workflowLogWebhook.includeUsageData,
         levelFilter: workflowLogWebhook.levelFilter,
         triggerFilter: workflowLogWebhook.triggerFilter,
         active: workflowLogWebhook.active,

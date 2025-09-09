@@ -1,3 +1,4 @@
+CREATE TYPE "public"."webhook_delivery_status" AS ENUM('pending', 'success', 'failed');--> statement-breakpoint
 CREATE TABLE "workflow_log_webhook" (
 	"id" text PRIMARY KEY NOT NULL,
 	"workflow_id" text NOT NULL,
@@ -19,7 +20,7 @@ CREATE TABLE "workflow_log_webhook_delivery" (
 	"subscription_id" text NOT NULL,
 	"workflow_id" text NOT NULL,
 	"execution_id" text NOT NULL,
-	"status" text NOT NULL,
+	"status" "webhook_delivery_status" DEFAULT 'pending' NOT NULL,
 	"attempts" integer DEFAULT 0 NOT NULL,
 	"last_attempt_at" timestamp,
 	"next_attempt_at" timestamp,

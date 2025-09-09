@@ -465,6 +465,12 @@ export const workflowLogWebhook = pgTable(
   })
 )
 
+export const webhookDeliveryStatusEnum = pgEnum('webhook_delivery_status', [
+  'pending',
+  'success',
+  'failed',
+])
+
 export const workflowLogWebhookDelivery = pgTable(
   'workflow_log_webhook_delivery',
   {
@@ -476,7 +482,7 @@ export const workflowLogWebhookDelivery = pgTable(
       .notNull()
       .references(() => workflow.id, { onDelete: 'cascade' }),
     executionId: text('execution_id').notNull(),
-    status: text('status').notNull(), // pending, success, failed
+    status: webhookDeliveryStatusEnum('status').notNull().default('pending'),
     attempts: integer('attempts').notNull().default(0),
     lastAttemptAt: timestamp('last_attempt_at'),
     nextAttemptAt: timestamp('next_attempt_at'),

@@ -62,7 +62,7 @@ export async function getUserLimits(userId: string): Promise<UserLimits> {
 export function createApiResponse<T>(
   data: T,
   limits: UserLimits,
-  apiRateLimit: { remaining: number; resetAt: Date }
+  apiRateLimit: { limit: number; remaining: number; resetAt: Date }
 ) {
   return {
     body: {
@@ -70,7 +70,7 @@ export function createApiResponse<T>(
       limits,
     },
     headers: {
-      'X-RateLimit-Limit': '60',
+      'X-RateLimit-Limit': apiRateLimit.limit.toString(),
       'X-RateLimit-Remaining': apiRateLimit.remaining.toString(),
       'X-RateLimit-Reset': apiRateLimit.resetAt.toISOString(),
     },
