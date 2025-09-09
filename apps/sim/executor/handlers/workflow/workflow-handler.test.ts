@@ -50,9 +50,7 @@ describe('WorkflowBlockHandler', () => {
     // Reset all mocks
     vi.clearAllMocks()
 
-    // Clear the static execution stack
-
-    ;(WorkflowBlockHandler as any).executionStack.clear()
+    // No cycle detection state to clear
 
     // Setup default fetch mock
     mockFetch.mockResolvedValue({
@@ -102,19 +100,7 @@ describe('WorkflowBlockHandler', () => {
       )
     })
 
-    it('should detect and prevent cyclic dependencies', async () => {
-      const inputs = { workflowId: 'child-workflow-id' }
-
-      // Simulate a cycle by adding the execution to the stack
-
-      ;(WorkflowBlockHandler as any).executionStack.add(
-        'parent-workflow-id_sub_child-workflow-id_workflow-block-1'
-      )
-
-      await expect(handler.execute(mockBlock, inputs, mockContext)).rejects.toThrow(
-        'Error in child workflow "child-workflow-id": Cyclic workflow dependency detected: parent-workflow-id_sub_child-workflow-id_workflow-block-1'
-      )
-    })
+    // Cycle detection removed; relying on depth/timeout
 
     it('should enforce maximum depth limit', async () => {
       const inputs = { workflowId: 'child-workflow-id' }
