@@ -467,6 +467,7 @@ export const workflowLogWebhook = pgTable(
 
 export const webhookDeliveryStatusEnum = pgEnum('webhook_delivery_status', [
   'pending',
+  'in_progress',
   'success',
   'failed',
 ])

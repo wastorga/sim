@@ -1,4 +1,4 @@
-CREATE TYPE "public"."webhook_delivery_status" AS ENUM('pending', 'success', 'failed');--> statement-breakpoint
+CREATE TYPE "public"."webhook_delivery_status" AS ENUM('pending', 'in_progress', 'success', 'failed');--> statement-breakpoint
 CREATE TABLE "workflow_log_webhook" (
 	"id" text PRIMARY KEY NOT NULL,
 	"workflow_id" text NOT NULL,

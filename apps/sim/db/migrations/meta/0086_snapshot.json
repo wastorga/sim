@@ -1,5 +1,5 @@
 {
-  "id": "0eb39f57-62ea-4252-89b9-56bb35888885",
+  "id": "ef439418-5e82-4e59-9013-8b116258d511",
   "prevId": "563ccace-aa60-4c89-bc09-2a8102916d12",
   "version": "7",
   "dialect": "postgresql",
@@ -6332,7 +6332,7 @@
     "public.webhook_delivery_status": {
       "name": "webhook_delivery_status",
       "schema": "public",
-      "values": ["pending", "success", "failed"]
+      "values": ["pending", "in_progress", "success", "failed"]
     },
     "public.workspace_invitation_status": {
       "name": "workspace_invitation_status",

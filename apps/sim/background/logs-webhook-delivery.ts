@@ -1,6 +1,6 @@
 import { createHmac } from 'crypto'
 import { task, wait } from '@trigger.dev/sdk'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull, lte, or, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { createLogger } from '@/lib/logs/console/logger'
 import type { WorkflowExecutionLog } from '@/lib/logs/types'
@@ -112,18 +112,34 @@ export const logsWebhookDelivery = task({
         return
       }
 
-      const [delivery] = await db
-        .select()
-        .from(workflowLogWebhookDelivery)
-        .where(eq(workflowLogWebhookDelivery.id, deliveryId))
-        .limit(1)
+      // Atomically claim this delivery row for processing and increment attempts
+      const claimed = await db
+        .update(workflowLogWebhookDelivery)
+        .set({
+          status: 'in_progress',
+          attempts: sql`${workflowLogWebhookDelivery.attempts} + 1`,
+          lastAttemptAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(workflowLogWebhookDelivery.id, deliveryId),
+            eq(workflowLogWebhookDelivery.status, 'pending'),
+            // Only claim if not scheduled in the future or schedule has arrived
+            or(
+              isNull(workflowLogWebhookDelivery.nextAttemptAt),
+              lte(workflowLogWebhookDelivery.nextAttemptAt, new Date())
+            )
+          )
+        )
+        .returning({ attempts: workflowLogWebhookDelivery.attempts })
 
-      if (!delivery) {
-        logger.error(`Delivery ${deliveryId} not found`)
+      if (claimed.length === 0) {
+        logger.info(`Delivery ${deliveryId} not claimable (already in progress or not due)`)
         return
       }
 
-      const attempts = delivery.attempts + 1
+      const attempts = claimed[0].attempts
       const timestamp = Date.now()
       const eventId = `evt_${uuidv4()}`
 
@@ -235,7 +251,12 @@ export const logsWebhookDelivery = task({
               errorMessage: null,
               updatedAt: new Date(),
             })
-            .where(eq(workflowLogWebhookDelivery.id, deliveryId))
+            .where(
+              and(
+                eq(workflowLogWebhookDelivery.id, deliveryId),
+                eq(workflowLogWebhookDelivery.status, 'in_progress')
+              )
+            )
 
           logger.info(`Webhook delivery ${deliveryId} succeeded`, {
             status: response.status,
@@ -259,7 +280,12 @@ export const logsWebhookDelivery = task({
               errorMessage: `HTTP ${response.status}`,
               updatedAt: new Date(),
             })
-            .where(eq(workflowLogWebhookDelivery.id, deliveryId))
+            .where(
+              and(
+                eq(workflowLogWebhookDelivery.id, deliveryId),
+                eq(workflowLogWebhookDelivery.status, 'in_progress')
+              )
+            )
 
           logger.warn(`Webhook delivery ${deliveryId} failed permanently`, {
             status: response.status,
@@ -286,7 +312,12 @@ export const logsWebhookDelivery = task({
             errorMessage: `HTTP ${response.status} - will retry`,
             updatedAt: new Date(),
           })
-          .where(eq(workflowLogWebhookDelivery.id, deliveryId))
+          .where(
+            and(
+              eq(workflowLogWebhookDelivery.id, deliveryId),
+              eq(workflowLogWebhookDelivery.status, 'in_progress')
+            )
+          )
 
         // Schedule the next retry
         await wait.for({ seconds: delayWithJitter / 1000 })
@@ -324,7 +355,12 @@ export const logsWebhookDelivery = task({
             errorMessage: error.message,
             updatedAt: new Date(),
           })
-          .where(eq(workflowLogWebhookDelivery.id, deliveryId))
+          .where(
+            and(
+              eq(workflowLogWebhookDelivery.id, deliveryId),
+              eq(workflowLogWebhookDelivery.status, 'in_progress')
+            )
+          )
 
         if (attempts >= MAX_ATTEMPTS) {
           logger.error(`Webhook delivery ${deliveryId} failed after ${attempts} attempts`, {
