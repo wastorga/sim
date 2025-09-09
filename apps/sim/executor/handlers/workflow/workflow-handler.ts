@@ -92,8 +92,6 @@ export class WorkflowBlockHandler implements BlockHandler {
       const result = await subExecutor.execute(workflowId)
       const duration = performance.now() - startTime
 
-      // No-op: execution id used only for logging
-
       logger.info(`Child workflow ${childWorkflowName} completed in ${Math.round(duration)}ms`)
 
       const childTraceSpans = this.captureChildWorkflowLogs(result, childWorkflowName, context)

@@ -50,8 +50,6 @@ describe('WorkflowBlockHandler', () => {
     // Reset all mocks
     vi.clearAllMocks()
 
-    // No cycle detection state to clear
-
     // Setup default fetch mock
     mockFetch.mockResolvedValue({
       ok: true,
@@ -99,8 +97,6 @@ describe('WorkflowBlockHandler', () => {
         'No workflow selected for execution'
       )
     })
-
-    // Cycle detection removed; relying on depth/timeout
 
     it('should enforce maximum depth limit', async () => {
       const inputs = { workflowId: 'child-workflow-id' }
