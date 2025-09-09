@@ -598,6 +598,7 @@ export const userRateLimits = pgTable('user_rate_limits', {
   referenceId: text('reference_id').primaryKey(), // Can be userId or organizationId for pooling
   syncApiRequests: integer('sync_api_requests').notNull().default(0), // Sync API requests counter
   asyncApiRequests: integer('async_api_requests').notNull().default(0), // Async API requests counter
+  apiEndpointRequests: integer('api_endpoint_requests').notNull().default(0), // External API endpoint requests counter
   windowStart: timestamp('window_start').notNull().defaultNow(),
   lastRequestAt: timestamp('last_request_at').notNull().defaultNow(),
   isRateLimited: boolean('is_rate_limited').notNull().default(false),

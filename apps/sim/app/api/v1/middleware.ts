@@ -11,6 +11,7 @@ export interface RateLimitResult {
   allowed: boolean
   remaining: number
   resetAt: Date
+  limit: number
   userId?: string
   error?: string
 }
@@ -25,6 +26,7 @@ export async function checkRateLimit(
       return {
         allowed: false,
         remaining: 0,
+        limit: 10, // Default to free tier limit
         resetAt: new Date(),
         error: auth.error,
       }
@@ -33,12 +35,12 @@ export async function checkRateLimit(
     const userId = auth.userId!
     const subscription = await getHighestPrioritySubscription(userId)
 
-    const isAsync = endpoint === 'logs'
+    // Use api-endpoint trigger type for external API rate limiting
     const result = await rateLimiter.checkRateLimitWithSubscription(
       userId,
       subscription,
-      'api',
-      isAsync
+      'api-endpoint',
+      false // Not relevant for api-endpoint trigger type
     )
 
     if (!result.allowed) {
@@ -49,8 +51,17 @@ export async function checkRateLimit(
       })
     }
 
+    // Get the actual rate limit for this user's plan
+    const rateLimitStatus = await rateLimiter.getRateLimitStatusWithSubscription(
+      userId,
+      subscription,
+      'api-endpoint',
+      false
+    )
+
     return {
       ...result,
+      limit: rateLimitStatus.limit,
       userId,
     }
   } catch (error) {
@@ -58,6 +69,7 @@ export async function checkRateLimit(
     return {
       allowed: false,
       remaining: 0,
+      limit: 10,
       resetAt: new Date(Date.now() + 60000),
       error: 'Rate limit check failed',
     }
@@ -66,7 +78,7 @@ export async function checkRateLimit(
 
 export function createRateLimitResponse(result: RateLimitResult): NextResponse {
   const headers = {
-    'X-RateLimit-Limit': '60',
+    'X-RateLimit-Limit': result.limit.toString(),
     'X-RateLimit-Remaining': result.remaining.toString(),
     'X-RateLimit-Reset': result.resetAt.toISOString(),
   }
