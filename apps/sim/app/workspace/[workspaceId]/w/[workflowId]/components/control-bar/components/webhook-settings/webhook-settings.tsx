@@ -1,7 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Bell, Copy, Edit2, Eye, EyeOff, Plus, RefreshCw, Trash2, Webhook } from 'lucide-react'
+import {
+  AlertCircle,
+  Bell,
+  Copy,
+  Edit2,
+  Eye,
+  EyeOff,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Webhook,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Button,
@@ -88,6 +99,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
     levelFilter: ['info', 'error'],
     triggerFilter: ['api', 'webhook', 'schedule', 'manual', 'chat'],
   })
+  const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -112,20 +124,46 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
   }
 
   const createWebhook = async () => {
+    setFormError(null) // Clear any previous errors
+
     if (!newWebhook.url) {
-      toast.error('Please enter a webhook URL')
+      setFormError('Please enter a webhook URL')
+      return
+    }
+
+    // Validate URL format
+    try {
+      const url = new URL(newWebhook.url)
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        setFormError('URL must start with http:// or https://')
+        return
+      }
+    } catch {
+      setFormError('Please enter a valid URL (e.g., https://example.com/webhook)')
+      return
+    }
+
+    // Validate filters are not empty
+    if (newWebhook.levelFilter.length === 0) {
+      setFormError('Please select at least one log level filter')
+      return
+    }
+
+    if (newWebhook.triggerFilter.length === 0) {
+      setFormError('Please select at least one trigger filter')
       return
     }
 
     // Check for duplicate URL
     const existingWebhook = webhooks.find((w) => w.url === newWebhook.url)
     if (existingWebhook) {
-      toast.error('A webhook with this URL already exists')
+      setFormError('A webhook with this URL already exists')
       return
     }
 
     try {
       setIsCreating(true)
+      setFormError(null)
       const response = await fetch(`/api/workflows/${workflowId}/log-webhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,14 +183,21 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
           levelFilter: ['info', 'error'],
           triggerFilter: ['api', 'webhook', 'schedule', 'manual', 'chat'],
         })
+        setFormError(null)
         toast.success('Webhook created successfully')
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to create webhook')
+        // Show detailed validation errors if available
+        if (error.details && Array.isArray(error.details)) {
+          const errorMessages = error.details.map((e: any) => e.message || e.path?.join('.'))
+          setFormError(`Validation failed: ${errorMessages.join(', ')}`)
+        } else {
+          setFormError(error.error || 'Failed to create webhook')
+        }
       }
     } catch (error) {
       logger.error('Failed to create webhook', { error })
-      toast.error('Failed to create webhook')
+      setFormError('Failed to create webhook. Please try again.')
     } finally {
       setIsCreating(false)
     }
@@ -229,6 +274,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
   const cancelEdit = () => {
     setEditingWebhookId(null)
+    setFormError(null)
     setNewWebhook({
       url: '',
       secret: '',
@@ -243,6 +289,29 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
   const updateWebhook = async () => {
     if (!editingWebhookId) return
+
+    // Validate URL format
+    try {
+      const url = new URL(newWebhook.url)
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        toast.error('URL must start with http:// or https://')
+        return
+      }
+    } catch {
+      toast.error('Please enter a valid URL (e.g., https://example.com/webhook)')
+      return
+    }
+
+    // Validate filters are not empty
+    if (newWebhook.levelFilter.length === 0) {
+      toast.error('Please select at least one log level filter')
+      return
+    }
+
+    if (newWebhook.triggerFilter.length === 0) {
+      toast.error('Please select at least one trigger filter')
+      return
+    }
 
     // Check for duplicate URL (excluding current webhook)
     const existingWebhook = webhooks.find(
@@ -322,6 +391,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
           className='mt-4 flex min-h-0 flex-1 flex-col'
           onValueChange={(value) => {
             setActiveTab(value)
+            setFormError(null) // Clear any form errors when switching tabs
             if (value === 'webhooks') {
               loadWebhooks()
               cancelEdit() // Cancel any ongoing edit
@@ -336,7 +406,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
           </TabsList>
 
           <TabsContent value='webhooks' className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-            <div className='min-h-[600px] flex-1 overflow-y-auto pr-2'>
+            <div className='min-h-[600px] flex-1 overflow-y-auto px-4'>
               {isLoading ? (
                 <div className='flex h-full items-center justify-center'>
                   <RefreshCw className='h-5 w-5 animate-spin text-muted-foreground' />
@@ -436,7 +506,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className='space-y-2 text-xs'>
+                      <CardContent className='space-y-3 text-xs'>
                         <div className='flex gap-6'>
                           <div>
                             <span className='text-muted-foreground'>Levels:</span>{' '}
@@ -447,7 +517,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                             {webhook.triggerFilter.join(', ')}
                           </div>
                         </div>
-                        <div className='flex gap-6'>
+                        <div className='flex flex-wrap gap-x-6 gap-y-2.5'>
                           <div className='flex items-center gap-1'>
                             <Checkbox checked={webhook.includeFinalOutput} disabled />
                             <span className='text-muted-foreground'>Include output</span>
@@ -455,6 +525,14 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           <div className='flex items-center gap-1'>
                             <Checkbox checked={webhook.includeTraceSpans} disabled />
                             <span className='text-muted-foreground'>Include trace spans</span>
+                          </div>
+                          <div className='flex items-center gap-1'>
+                            <Checkbox checked={webhook.includeUsageData} disabled />
+                            <span className='text-muted-foreground'>Include usage data</span>
+                          </div>
+                          <div className='flex items-center gap-1'>
+                            <Checkbox checked={webhook.includeRateLimits} disabled />
+                            <span className='text-muted-foreground'>Include rate limits</span>
                           </div>
                         </div>
                       </CardContent>
@@ -466,7 +544,15 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
           </TabsContent>
 
           <TabsContent value='create' className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-            <div className='min-h-[600px] flex-1 overflow-y-auto pr-2'>
+            <div className='flex-1 overflow-y-auto px-4'>
+              {formError && (
+                <div className='mb-4 rounded-md border border-red-200 bg-red-50 p-3'>
+                  <div className='flex items-start gap-2'>
+                    <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-red-600' />
+                    <p className='text-red-800 text-sm'>{formError}</p>
+                  </div>
+                </div>
+              )}
               <div className='space-y-4 pb-6'>
                 <div>
                   <Label htmlFor='url'>Webhook URL</Label>
@@ -475,7 +561,10 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                     type='url'
                     placeholder='https://your-app.com/webhook'
                     value={newWebhook.url}
-                    onChange={(e) => setNewWebhook({ ...newWebhook, url: e.target.value })}
+                    onChange={(e) => {
+                      setNewWebhook({ ...newWebhook, url: e.target.value })
+                      setFormError(null) // Clear error when user types
+                    }}
                     className='mt-1.5'
                   />
                 </div>
@@ -488,7 +577,10 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                       type={showSecret ? 'text' : 'password'}
                       placeholder='Webhook secret for signature verification'
                       value={newWebhook.secret}
-                      onChange={(e) => setNewWebhook({ ...newWebhook, secret: e.target.value })}
+                      onChange={(e) => {
+                        setNewWebhook({ ...newWebhook, secret: e.target.value })
+                        setFormError(null) // Clear error when user types
+                      }}
                       className='pr-10'
                     />
                     <Button
@@ -501,7 +593,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                       {showSecret ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
                     </Button>
                   </div>
-                  <p className='mt-1 text-muted-foreground text-xs'>
+                  <p className='mt-2 text-muted-foreground text-xs'>
                     Used to sign webhook payloads with HMAC-SHA256
                   </p>
                 </div>
@@ -649,50 +741,55 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                       </Label>
                     </div>
                   </div>
-                  <p className='text-muted-foreground text-xs'>
+                  <p className='mt-1 text-muted-foreground text-xs'>
                     By default, only basic metadata and cost information is included
                   </p>
                 </div>
+              </div>
+            </div>
 
-                <div className='border-t pt-4'>
-                  {editingWebhookId && (
-                    <Button
-                      variant='outline'
-                      onClick={cancelEdit}
-                      disabled={isCreating}
-                      className='mr-2'
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                  <Button
-                    onClick={editingWebhookId ? updateWebhook : createWebhook}
-                    disabled={isCreating || !newWebhook.url}
-                    className={editingWebhookId ? '' : 'w-full'}
-                  >
-                    {isCreating ? (
+            <div className='flex-shrink-0 border-t bg-background p-4'>
+              {editingWebhookId && (
+                <Button
+                  variant='outline'
+                  onClick={cancelEdit}
+                  disabled={isCreating}
+                  className='mr-2'
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button
+                onClick={editingWebhookId ? updateWebhook : createWebhook}
+                disabled={
+                  isCreating ||
+                  !newWebhook.url ||
+                  newWebhook.levelFilter.length === 0 ||
+                  newWebhook.triggerFilter.length === 0
+                }
+                className={editingWebhookId ? '' : 'w-full'}
+              >
+                {isCreating ? (
+                  <>
+                    <RefreshCw className='mr-2 h-4 w-4 animate-spin' />
+                    {editingWebhookId ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  <>
+                    {editingWebhookId ? (
                       <>
-                        <RefreshCw className='mr-2 h-4 w-4 animate-spin' />
-                        {editingWebhookId ? 'Updating...' : 'Creating...'}
+                        <Edit2 className='mr-2 h-4 w-4' />
+                        Update Webhook
                       </>
                     ) : (
                       <>
-                        {editingWebhookId ? (
-                          <>
-                            <Edit2 className='mr-2 h-4 w-4' />
-                            Update Webhook
-                          </>
-                        ) : (
-                          <>
-                            <Plus className='mr-2 h-4 w-4' />
-                            Create Webhook
-                          </>
-                        )}
+                        <Plus className='mr-2 h-4 w-4' />
+                        Create Webhook
                       </>
                     )}
-                  </Button>
-                </div>
-              </div>
+                  </>
+                )}
+              </Button>
             </div>
           </TabsContent>
         </Tabs>
