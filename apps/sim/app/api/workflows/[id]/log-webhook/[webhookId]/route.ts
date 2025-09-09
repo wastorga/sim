@@ -9,6 +9,19 @@ import { permissions, workflow, workflowLogWebhook } from '@/db/schema'
 
 const logger = createLogger('WorkflowLogWebhookUpdate')
 
+type WebhookUpdatePayload = Pick<
+  typeof workflowLogWebhook.$inferInsert,
+  | 'url'
+  | 'includeFinalOutput'
+  | 'includeTraceSpans'
+  | 'includeRateLimits'
+  | 'includeUsageData'
+  | 'levelFilter'
+  | 'triggerFilter'
+  | 'secret'
+  | 'updatedAt'
+>
+
 const UpdateWebhookSchema = z.object({
   url: z.string().url('Invalid webhook URL'),
   secret: z.string().optional(),
@@ -94,7 +107,7 @@ export async function PUT(
     }
 
     // Prepare update data
-    const updateData: any = {
+    const updateData: WebhookUpdatePayload = {
       url: data.url,
       includeFinalOutput: data.includeFinalOutput,
       includeTraceSpans: data.includeTraceSpans,
@@ -111,11 +124,17 @@ export async function PUT(
       updateData.secret = encrypted
     }
 
-    const [updatedWebhook] = await db
+    const updatedWebhooks = await db
       .update(workflowLogWebhook)
       .set(updateData)
       .where(eq(workflowLogWebhook.id, webhookId))
       .returning()
+
+    if (updatedWebhooks.length === 0) {
+      return NextResponse.json({ error: 'Webhook not found' }, { status: 404 })
+    }
+
+    const updatedWebhook = updatedWebhooks[0]
 
     logger.info('Webhook updated', {
       webhookId,
