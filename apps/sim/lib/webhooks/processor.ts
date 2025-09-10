@@ -184,9 +184,49 @@ export async function verifyProviderAuth(
     }
   }
 
+  // Provider-specific verification (utils may return a response for some providers)
   const providerVerification = verifyProviderWebhook(foundWebhook, request, requestId)
   if (providerVerification) {
     return providerVerification
+  }
+
+  // Generic webhook authentication
+  if (foundWebhook.provider === 'generic') {
+    const providerConfig = (foundWebhook.providerConfig as Record<string, any>) || {}
+
+    if (providerConfig.requireAuth) {
+      const configToken = providerConfig.token
+      const secretHeaderName = providerConfig.secretHeaderName
+
+      if (configToken) {
+        let isTokenValid = false
+
+        if (secretHeaderName) {
+          // Check custom header (headers are case-insensitive)
+          const headerValue = request.headers.get(secretHeaderName.toLowerCase())
+          if (headerValue === configToken) {
+            isTokenValid = true
+          }
+        } else {
+          // Check Authorization: Bearer <token> (case-insensitive)
+          const authHeader = request.headers.get('authorization')
+          if (authHeader?.toLowerCase().startsWith('bearer ')) {
+            const token = authHeader.substring(7)
+            if (token === configToken) {
+              isTokenValid = true
+            }
+          }
+        }
+
+        if (!isTokenValid) {
+          return new NextResponse('Unauthorized - Invalid authentication token', { status: 401 })
+        }
+      } else {
+        return new NextResponse('Unauthorized - Authentication required but not configured', {
+          status: 401,
+        })
+      }
+    }
   }
 
   return null
