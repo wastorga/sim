@@ -610,6 +610,13 @@
       "when": 1757448419436,
       "tag": "0087_wealthy_landau",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1757525442628,
+      "tag": "0088_broken_caretaker",
+      "breakpoints": true
     }
   ]
 }
