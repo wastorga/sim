@@ -2,6 +2,7 @@ import type { InferSelectModel } from 'drizzle-orm'
 import { and, desc, eq } from 'drizzle-orm'
 import type { Edge } from 'reactflow'
 import { createLogger } from '@/lib/logs/console/logger'
+import { sanitizeAgentToolsInBlocks } from '@/lib/workflows/validation'
 import { db } from '@/db'
 import {
   workflowBlocks,
@@ -124,6 +125,14 @@ export async function loadWorkflowFromNormalizedTables(
       blocksMap[block.id] = assembled
     })
 
+    // Sanitize any invalid custom tools in agent blocks to prevent client crashes
+    const { blocks: sanitizedBlocks, warnings } = sanitizeAgentToolsInBlocks(blocksMap)
+    if (warnings.length > 0) {
+      logger.warn(`Sanitized workflow ${workflowId} tools with ${warnings.length} warning(s)`, {
+        warnings,
+      })
+    }
+
     // Convert edges to the expected format
     const edgesArray: Edge[] = edges.map((edge) => ({
       id: edge.id,
@@ -174,7 +183,7 @@ export async function loadWorkflowFromNormalizedTables(
     })
 
     return {
-      blocks: blocksMap,
+      blocks: sanitizedBlocks,
       edges: edgesArray,
       loops,
       parallels,
