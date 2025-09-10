@@ -43,6 +43,11 @@ import {
 } from './components'
 
 /**
+ * Duration in milliseconds for auto-hover animation cycle
+ */
+const AUTO_HOVER_INTERVAL_MS = 2000
+
+/**
  * Service-specific template messages for the hero input
  */
 const SERVICE_TEMPLATES = {
@@ -167,17 +172,34 @@ export default function Hero() {
   /**
    * Auto-hover animation state
    */
-  const [autoHoverIndex, setAutoHoverIndex] = React.useState(1)
+  const [autoHoverIndex, setAutoHoverIndex] = React.useState(0)
   const [isUserHovering, setIsUserHovering] = React.useState(false)
   const [lastHoveredIndex, setLastHoveredIndex] = React.useState<number | null>(null)
   const intervalRef = React.useRef<NodeJS.Timeout | null>(null)
 
   /**
-   * Handle service icon click to populate textarea with template
+   * Tracks which service icon button was clicked to maintain its hover appearance
+   * @type {number | null} - Index of the clicked button, or null if no button is clicked
    */
-  const handleServiceClick = (service: keyof typeof SERVICE_TEMPLATES) => {
-    setTextValue(SERVICE_TEMPLATES[service])
-  }
+  const [clickedIndex, setClickedIndex] = React.useState<number | null>(null)
+
+  /**
+   * Handle service icon click to populate textarea with template
+   * @param {keyof typeof SERVICE_TEMPLATES} service - The service key to get template text
+   * @param {number} index - The index of the clicked button
+   */
+  const handleServiceClick = React.useCallback(
+    (service: keyof typeof SERVICE_TEMPLATES, index: number) => {
+      setTextValue(SERVICE_TEMPLATES[service])
+      setClickedIndex(index)
+      // Stop auto-hover when a button is clicked but keep the current index
+      // This prevents issues when resuming auto-hover later
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    },
+    []
+  )
 
   /**
    * Set visible icon count based on screen size
@@ -223,17 +245,24 @@ export default function Hero() {
 
   /**
    * Auto-hover animation effect
+   * Cycles through service icons every 2 seconds when:
+   * - User is not hovering over the icon container
+   * - No button has been clicked
+   *
+   * @dependency isUserHovering - Pauses when user is hovering
+   * @dependency clickedIndex - Stops when a button is clicked
+   * @dependency visibleIconCount - Determines cycle range
    */
   React.useEffect(() => {
     // Start the interval when component mounts
     const startInterval = () => {
       intervalRef.current = setInterval(() => {
         setAutoHoverIndex((prev) => (prev + 1) % visibleIconCount)
-      }, 2000)
+      }, AUTO_HOVER_INTERVAL_MS)
     }
 
-    // Only run interval when user is not hovering
-    if (!isUserHovering) {
+    // Only run interval when user is not hovering and no button is clicked
+    if (!isUserHovering && clickedIndex === null) {
       startInterval()
     }
 
@@ -243,28 +272,39 @@ export default function Hero() {
         clearInterval(intervalRef.current)
       }
     }
-  }, [isUserHovering, visibleIconCount])
+  }, [isUserHovering, visibleIconCount, clickedIndex])
 
   /**
    * Handle mouse enter on icon container
+   * Stops auto-hover animation when user hovers over the container
    */
-  const handleIconContainerMouseEnter = () => {
+  const handleIconContainerMouseEnter = React.useCallback(() => {
     setIsUserHovering(true)
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
     }
-  }
+  }, [])
 
   /**
    * Handle mouse leave on icon container
+   * Resumes auto-hover animation if no button is clicked
    */
-  const handleIconContainerMouseLeave = () => {
+  const handleIconContainerMouseLeave = React.useCallback(() => {
     setIsUserHovering(false)
-    // Start from the next icon after the last hovered one
-    if (lastHoveredIndex !== null) {
-      setAutoHoverIndex((lastHoveredIndex + 1) % visibleIconCount)
+    // Only restart auto-hover if no button is clicked
+    if (clickedIndex === null) {
+      // If user hovered over a specific button, start from the next one
+      // Otherwise, continue from where auto-hover left off
+      if (lastHoveredIndex !== null) {
+        setAutoHoverIndex((lastHoveredIndex + 1) % visibleIconCount)
+      } else {
+        // Resume from current position if no specific button was hovered
+        setAutoHoverIndex((prev) => (prev === -1 ? 0 : prev))
+      }
     }
-  }
+    // Reset last hovered index when leaving the container
+    setLastHoveredIndex(null)
+  }, [clickedIndex, lastHoveredIndex, visibleIconCount])
 
   /**
    * Handle form submission
@@ -406,10 +446,13 @@ export default function Hero() {
             <IconButton
               key={service.key}
               aria-label={service.label}
-              onClick={() => handleServiceClick(service.key as keyof typeof SERVICE_TEMPLATES)}
+              onClick={() =>
+                handleServiceClick(service.key as keyof typeof SERVICE_TEMPLATES, index)
+              }
               onMouseEnter={() => setLastHoveredIndex(index)}
               style={service.style}
-              isAutoHovered={!isUserHovering && index === autoHoverIndex}
+              isAutoHovered={!isUserHovering && index === autoHoverIndex && clickedIndex === null}
+              isClicked={clickedIndex === index}
             >
               <Icon className='h-5 w-5 sm:h-6 sm:w-6' />
             </IconButton>
@@ -428,7 +471,20 @@ export default function Hero() {
             }
             className='h-[100px] w-full resize-none px-3 py-2.5 text-sm sm:h-[120px] sm:px-4 sm:py-3 sm:text-base'
             value={textValue}
-            onChange={(e) => setTextValue(e.target.value)}
+            onChange={React.useCallback(
+              (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                setTextValue(e.target.value)
+                // Reset clicked state when user clears the textarea
+                if (e.target.value.trim() === '') {
+                  setClickedIndex(null)
+                  // Resume auto-hover from where it left off
+                  if (!isUserHovering) {
+                    setAutoHoverIndex((prev) => (prev + 1) % visibleIconCount)
+                  }
+                }
+              },
+              [isUserHovering, visibleIconCount]
+            )}
             onKeyDown={handleKeyDown}
             style={{
               borderRadius: 16,
