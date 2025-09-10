@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Copy, Eye, EyeOff, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button, Card, CardContent, Input, Label } from '@/components/ui'
-import { cn } from '@/lib/utils'
+import { cn, generatePassword } from '@/lib/utils'
 import type { AuthType } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/control-bar/components/deploy-modal/components/chat-deploy/hooks/use-chat-form'
 
 interface AuthSelectorProps {
@@ -32,16 +32,9 @@ export function AuthSelector({
   const [emailError, setEmailError] = useState('')
   const [copySuccess, setCopySuccess] = useState(false)
 
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-+='
-    let result = ''
-    const length = 24
-
-    for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-
-    onPasswordChange(result)
+  const handleGeneratePassword = () => {
+    const password = generatePassword(24)
+    onPasswordChange(password)
   }
 
   const copyToClipboard = (text: string) => {
@@ -146,7 +139,7 @@ export function AuthSelector({
                   type='button'
                   variant='ghost'
                   size='icon'
-                  onClick={generatePassword}
+                  onClick={handleGeneratePassword}
                   disabled={disabled}
                   className='px-2'
                 >
