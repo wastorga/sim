@@ -14,6 +14,14 @@ import {
   Trash2,
 } from 'lucide-react'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   Button,
   Dialog,
   DialogContent,
@@ -69,6 +77,10 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
   const [showForm, setShowForm] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [webhookToDelete, setWebhookToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [operationStatus, setOperationStatus] = useState<{
     type: 'success' | 'error' | null
     message: string
@@ -226,10 +238,18 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
     }
   }
 
-  const deleteWebhook = async (webhookId: string) => {
+  const handleDeleteClick = (webhookId: string) => {
+    setWebhookToDelete(webhookId)
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDeleteWebhook = async () => {
+    if (!webhookToDelete) return
+
     try {
+      setIsDeleting(true)
       const response = await fetch(
-        `/api/workflows/${workflowId}/log-webhook?webhookId=${webhookId}`,
+        `/api/workflows/${workflowId}/log-webhook?webhookId=${webhookToDelete}`,
         {
           method: 'DELETE',
         }
@@ -238,10 +258,32 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
       if (response.ok) {
         // Refresh the webhooks list to ensure consistency
         await loadWebhooks()
+        setOperationStatus({
+          type: 'success',
+          message: 'Webhook deleted successfully',
+        })
+      } else {
+        setOperationStatus({
+          type: 'error',
+          message: 'Failed to delete webhook',
+        })
       }
     } catch (error) {
       logger.error('Failed to delete webhook', { error })
+      setOperationStatus({
+        type: 'error',
+        message: 'Failed to delete webhook',
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteDialog(false)
+      setWebhookToDelete(null)
     }
+  }
+
+  const handleDeleteDialogClose = () => {
+    setShowDeleteDialog(false)
+    setWebhookToDelete(null)
   }
 
   const testWebhook = async (webhookId: string) => {
@@ -290,10 +332,14 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
   // Remove copyWebhookId function as it's not used
 
-  const handleGeneratePassword = () => {
+  const handleGeneratePassword = async () => {
+    setIsGenerating(true)
+    // Add a small delay for visual feedback
+    await new Promise((resolve) => setTimeout(resolve, 300))
     const password = generatePassword(24)
     setNewWebhook({ ...newWebhook, secret: password })
     setFieldErrors({})
+    setIsGenerating(false)
   }
 
   const copyToClipboard = (text: string) => {
@@ -342,6 +388,8 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
     setOperationStatus({ type: null, message: '' })
     setTestStatus(null)
     setSearchTerm('')
+    setShowDeleteDialog(false)
+    setWebhookToDelete(null)
     onOpenChange(false)
   }
 
@@ -541,18 +589,28 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                                       size='icon'
                                       onClick={() => testWebhook(webhook.id)}
                                       disabled={isTesting === webhook.id}
-                                      className='h-9 w-9 rounded-[8px] border bg-background p-0 text-muted-foreground shadow-xs hover:bg-muted'
+                                      className={cn(
+                                        'group relative h-8 w-8 rounded-md border border-border/40 bg-background/80 backdrop-blur-sm',
+                                        'text-muted-foreground/70 shadow-sm transition-all duration-200',
+                                        'hover:border-border hover:bg-muted/50 hover:text-foreground hover:shadow-md',
+                                        'active:scale-95 active:shadow-sm',
+                                        'disabled:cursor-not-allowed disabled:opacity-50',
+                                        'focus-visible:ring-2 focus-visible:ring-muted-foreground/20 focus-visible:ring-offset-1'
+                                      )}
                                     >
                                       <RefreshCw
                                         className={cn(
-                                          'h-4 w-4',
+                                          'h-3.5 w-3.5 transition-transform duration-200',
+                                          'group-hover:scale-110',
                                           isTesting === webhook.id && 'animate-spin'
                                         )}
                                       />
                                       <span className='sr-only'>Test webhook</span>
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>Test</TooltipContent>
+                                  <TooltipContent side='top' align='center'>
+                                    Test webhook
+                                  </TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -560,27 +618,43 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                                       variant='ghost'
                                       size='icon'
                                       onClick={() => startEditWebhook(webhook)}
-                                      className='h-9 w-9 rounded-[8px] border bg-background p-0 text-muted-foreground shadow-xs hover:bg-muted'
+                                      className={cn(
+                                        'group relative h-8 w-8 rounded-md border border-border/40 bg-background/80 backdrop-blur-sm',
+                                        'text-muted-foreground/70 shadow-sm transition-all duration-200',
+                                        'hover:border-border hover:bg-muted/50 hover:text-foreground hover:shadow-md',
+                                        'active:scale-95 active:shadow-sm',
+                                        'focus-visible:ring-2 focus-visible:ring-muted-foreground/20 focus-visible:ring-offset-1'
+                                      )}
                                     >
-                                      <Pencil className='h-4 w-4' />
+                                      <Pencil className='h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110' />
                                       <span className='sr-only'>Edit webhook</span>
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>Edit</TooltipContent>
+                                  <TooltipContent side='top' align='center'>
+                                    Edit webhook
+                                  </TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       variant='ghost'
                                       size='icon'
-                                      onClick={() => deleteWebhook(webhook.id)}
-                                      className='h-9 w-9 rounded-[8px] border bg-background p-0 text-muted-foreground shadow-xs transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white'
+                                      onClick={() => handleDeleteClick(webhook.id)}
+                                      className={cn(
+                                        'group relative h-8 w-8 rounded-md border border-border/40 bg-background/80 backdrop-blur-sm',
+                                        'text-muted-foreground/70 shadow-sm transition-all duration-200',
+                                        'hover:border-border hover:bg-muted/50 hover:text-muted-foreground hover:shadow-md',
+                                        'active:scale-95 active:shadow-sm',
+                                        'focus-visible:ring-2 focus-visible:ring-muted-foreground/20 focus-visible:ring-offset-1'
+                                      )}
                                     >
-                                      <Trash2 className='h-4 w-4' />
+                                      <Trash2 className='h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110' />
                                       <span className='sr-only'>Delete webhook</span>
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>Delete</TooltipContent>
+                                  <TooltipContent side='bottom' align='end'>
+                                    Delete webhook
+                                  </TooltipContent>
                                 </Tooltip>
                               </div>
                             </div>
@@ -711,14 +785,14 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                             setNewWebhook({ ...newWebhook, secret: e.target.value })
                             setFieldErrors({ ...fieldErrors, general: undefined })
                           }}
-                          className='h-9 rounded-[8px] pr-28'
+                          className='h-9 rounded-[8px] pr-32'
                           autoComplete='new-password'
                           autoCorrect='off'
                           autoCapitalize='off'
                           spellCheck='false'
                           data-form-type='other'
                         />
-                        <div className='absolute top-0 right-0 flex h-9 pr-1'>
+                        <div className='absolute top-0.5 right-0.5 flex h-8 items-center gap-1 pr-1'>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -726,13 +800,29 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                                 variant='ghost'
                                 size='sm'
                                 onClick={handleGeneratePassword}
-                                className='h-9 px-2'
+                                disabled={isGenerating}
+                                className={cn(
+                                  'group h-7 w-7 rounded-md p-0',
+                                  'text-muted-foreground/60 transition-all duration-200',
+                                  'hover:scale-105 hover:bg-muted/50 hover:text-foreground',
+                                  'active:scale-95',
+                                  'disabled:cursor-not-allowed disabled:opacity-50',
+                                  'focus-visible:ring-2 focus-visible:ring-muted-foreground/20 focus-visible:ring-offset-1'
+                                )}
                               >
-                                <RefreshCw className='h-4 w-4' />
+                                <RefreshCw
+                                  className={cn(
+                                    'h-3.5 w-3.5 transition-transform duration-200',
+                                    'group-hover:rotate-90',
+                                    isGenerating && 'animate-spin'
+                                  )}
+                                />
                                 <span className='sr-only'>Generate password</span>
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Generate secure secret</TooltipContent>
+                            <TooltipContent side='top' align='center'>
+                              Generate secure secret
+                            </TooltipContent>
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -742,17 +832,26 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                                 size='sm'
                                 onClick={() => copyToClipboard(newWebhook.secret)}
                                 disabled={!newWebhook.secret}
-                                className='h-9 px-2'
+                                className={cn(
+                                  'group h-7 w-7 rounded-md p-0',
+                                  'text-muted-foreground/60 transition-all duration-200',
+                                  'hover:scale-105 hover:bg-muted/50 hover:text-foreground',
+                                  'active:scale-95',
+                                  'disabled:cursor-not-allowed disabled:opacity-30',
+                                  'focus-visible:ring-2 focus-visible:ring-muted-foreground/20 focus-visible:ring-offset-1'
+                                )}
                               >
                                 {copySuccess ? (
-                                  <Check className='h-4 w-4' />
+                                  <Check className='h-3.5 w-3.5 text-foreground' />
                                 ) : (
-                                  <Copy className='h-4 w-4' />
+                                  <Copy className='h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110' />
                                 )}
                                 <span className='sr-only'>Copy secret</span>
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Copy secret</TooltipContent>
+                            <TooltipContent side='top' align='center'>
+                              Copy secret
+                            </TooltipContent>
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -760,20 +859,26 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                                 type='button'
                                 variant='ghost'
                                 size='sm'
-                                className='h-9 px-2'
+                                className={cn(
+                                  'group h-7 w-7 rounded-md p-0',
+                                  'text-muted-foreground/60 transition-all duration-200',
+                                  'hover:scale-105 hover:bg-muted/50 hover:text-foreground',
+                                  'active:scale-95',
+                                  'focus-visible:ring-2 focus-visible:ring-muted-foreground/20 focus-visible:ring-offset-1'
+                                )}
                                 onClick={() => setShowSecret(!showSecret)}
                               >
                                 {showSecret ? (
-                                  <EyeOff className='h-4 w-4' />
+                                  <EyeOff className='h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110' />
                                 ) : (
-                                  <Eye className='h-4 w-4' />
+                                  <Eye className='h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110' />
                                 )}
                                 <span className='sr-only'>
                                   {showSecret ? 'Hide secret' : 'Show secret'}
                                 </span>
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>
+                            <TooltipContent side='top' align='center'>
                               {showSecret ? 'Hide secret' : 'Show secret'}
                             </TooltipContent>
                           </Tooltip>
@@ -957,11 +1062,11 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                     newWebhook.levelFilter.length === 0 ||
                     newWebhook.triggerFilter.length === 0
                   }
-                  className='h-9 rounded-[8px]'
+                  className='h-9 rounded-[8px] bg-[var(--brand-primary-hex)] font-[480] text-white shadow-[0_0_0_0_var(--brand-primary-hex)] transition-all duration-200 hover:bg-[var(--brand-primary-hover-hex)] hover:shadow-[0_0_0_4px_rgba(127,47,255,0.15)] disabled:opacity-50 disabled:hover:shadow-none'
                 >
                   {isCreating ? (
                     <>
-                      <RefreshCw className='h-4 w-4 animate-spin' />
+                      <RefreshCw className='mr-2 h-4 w-4 animate-spin' />
                       {editingWebhookId ? 'Updating...' : 'Creating...'}
                     </>
                   ) : (
@@ -981,8 +1086,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                     setSearchTerm('')
                     setShowForm(true)
                   }}
-                  variant='ghost'
-                  className='h-9 rounded-[8px] border bg-background px-3 shadow-xs hover:bg-muted focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0'
+                  className='h-9 rounded-[8px] bg-[var(--brand-primary-hex)] px-3 font-[480] text-white shadow-[0_0_0_0_var(--brand-primary-hex)] transition-all duration-200 hover:bg-[var(--brand-primary-hover-hex)] hover:shadow-[0_0_0_4px_rgba(127,47,255,0.15)]'
                 >
                   <Plus className='h-4 w-4 stroke-[2px]' />
                   Add Webhook
@@ -993,6 +1097,31 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
           </div>
         </div>
       </DialogContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={handleDeleteDialogClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete webhook?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the webhook configuration and stop all notifications.{' '}
+              <span className='text-red-500 dark:text-red-500'>This action cannot be undone.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className='flex'>
+            <AlertDialogCancel className='h-9 w-full rounded-[8px]' disabled={isDeleting}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteWebhook}
+              disabled={isDeleting}
+              className='h-9 w-full rounded-[8px] bg-red-500 text-white transition-all duration-200 hover:bg-red-600 dark:bg-red-500 dark:hover:bg-red-600'
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }
