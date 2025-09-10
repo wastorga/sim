@@ -3,18 +3,15 @@
 import { useEffect, useState } from 'react'
 import {
   AlertCircle,
-  Bell,
   Check,
-  CheckCircle,
   Copy,
-  Edit2,
   Eye,
   EyeOff,
+  Pencil,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
-  Webhook,
-  X,
 } from 'lucide-react'
 import {
   Button,
@@ -24,13 +21,14 @@ import {
   DialogTitle,
   Input,
   Label,
+  Skeleton,
   Switch,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui'
 import { createLogger } from '@/lib/logs/console/logger'
-import { generatePassword } from '@/lib/utils'
+import { cn, generatePassword } from '@/lib/utils'
 import type {
   LogLevel as StoreLogLevel,
   TriggerType as StoreTriggerType,
@@ -40,7 +38,6 @@ const logger = createLogger('WebhookSettings')
 
 type NotificationLogLevel = Exclude<StoreLogLevel, 'all'>
 type NotificationTrigger = Exclude<StoreTriggerType, 'all'>
-type TabView = 'active' | 'create'
 
 interface WebhookConfig {
   id: string
@@ -69,8 +66,9 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
   const [isTesting, setIsTesting] = useState<string | null>(null)
   const [showSecret, setShowSecret] = useState(false)
   const [editingWebhookId, setEditingWebhookId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TabView>('create')
+  const [showForm, setShowForm] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const [operationStatus, setOperationStatus] = useState<{
     type: 'success' | 'error' | null
     message: string
@@ -91,6 +89,11 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
     levelFilter: NotificationLogLevel[]
     triggerFilter: NotificationTrigger[]
   }
+
+  // Filter webhooks based on search term
+  const filteredWebhooks = webhooks.filter((webhook) =>
+    webhook.url.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   const [newWebhook, setNewWebhook] = useState<EditableWebhookPayload>({
     url: '',
@@ -123,11 +126,9 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
         const data = await response.json()
         const list: WebhookConfig[] = data.data || []
         setWebhooks(list)
-        // Set initial tab based on whether webhooks exist
-        if (list.length > 0) {
-          setActiveTab('active')
-        } else {
-          setActiveTab('create')
+        // Show form if no webhooks exist
+        if (list.length === 0) {
+          setShowForm(true)
         }
       }
     } catch (error) {
@@ -202,7 +203,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
           triggerFilter: ['api', 'webhook', 'schedule', 'manual', 'chat'],
         })
         setFieldErrors({})
-        setActiveTab('active')
+        setShowForm(false)
         setOperationStatus({
           type: 'success',
           message: 'Webhook created successfully',
@@ -237,22 +238,9 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
       if (response.ok) {
         // Refresh the webhooks list to ensure consistency
         await loadWebhooks()
-        setOperationStatus({
-          type: 'success',
-          message: 'Webhook deleted',
-        })
-      } else {
-        setOperationStatus({
-          type: 'error',
-          message: 'Failed to delete webhook',
-        })
       }
     } catch (error) {
       logger.error('Failed to delete webhook', { error })
-      setOperationStatus({
-        type: 'error',
-        message: 'Failed to delete webhook',
-      })
     }
   }
 
@@ -311,13 +299,8 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     setCopySuccess(true)
-    setOperationStatus({
-      type: 'success',
-      message: 'Secret copied to clipboard',
-    })
     setTimeout(() => {
       setCopySuccess(false)
-      setOperationStatus({ type: null, message: '' })
     }, 2000)
   }
 
@@ -333,6 +316,8 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
       levelFilter: webhook.levelFilter,
       triggerFilter: webhook.triggerFilter,
     })
+    setSearchTerm('')
+    setShowForm(true)
   }
 
   const cancelEdit = () => {
@@ -349,12 +334,14 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
       levelFilter: ['info', 'error'],
       triggerFilter: ['api', 'webhook', 'schedule', 'manual', 'chat'],
     })
+    setShowForm(false)
   }
 
   const handleCloseModal = () => {
     cancelEdit()
     setOperationStatus({ type: null, message: '' })
     setTestStatus(null)
+    setSearchTerm('')
     onOpenChange(false)
   }
 
@@ -431,7 +418,6 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
       if (response.ok) {
         await loadWebhooks()
         cancelEdit()
-        setActiveTab('active')
         setOperationStatus({
           type: 'success',
           message: 'Webhook updated successfully',
@@ -450,208 +436,223 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
 
   return (
     <Dialog open={open} onOpenChange={handleCloseModal}>
-      <DialogContent
-        className='flex max-h-[78vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px]'
-        hideCloseButton
-      >
+      <DialogContent className='flex h-[70vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[800px]'>
         <DialogHeader className='flex-shrink-0 border-b px-6 py-4'>
-          <div className='flex items-center justify-between'>
-            <DialogTitle className='font-medium text-lg'>Webhook Notifications</DialogTitle>
-            <Button variant='ghost' size='icon' className='h-8 w-8 p-0' onClick={handleCloseModal}>
-              <X className='h-4 w-4' />
-              <span className='sr-only'>Close</span>
-            </Button>
-          </div>
+          <DialogTitle className='font-medium text-lg'>Webhook Notifications</DialogTitle>
         </DialogHeader>
 
-        {/* Success/Error Messages */}
-        {operationStatus.type && (
-          <div className='flex-shrink-0 px-6 pt-4'>
-            {operationStatus.type === 'success' ? (
-              <div className='rounded-[8px] border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-950/20'>
-                <div className='flex items-start gap-2'>
-                  <CheckCircle className='mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400' />
-                  <p className='text-green-800 text-sm dark:text-green-300'>
-                    {operationStatus.message}
-                  </p>
-                </div>
+        <div className='flex min-h-0 flex-1 flex-col'>
+          {/* Fixed Header with Search */}
+          {!showForm && (
+            <div className='flex-shrink-0 px-6 pt-4 pb-2'>
+              <div className='flex h-9 w-56 items-center gap-2 rounded-lg border bg-transparent pr-2 pl-3'>
+                <Search className='h-4 w-4 flex-shrink-0 text-muted-foreground' strokeWidth={2} />
+                <Input
+                  placeholder='Search webhooks...'
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className='flex-1 border-0 bg-transparent px-0 font-[380] font-sans text-base text-foreground leading-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0'
+                />
               </div>
-            ) : (
-              <div className='rounded-[8px] border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-950/20'>
-                <div className='flex items-start gap-2'>
-                  <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400' />
-                  <p className='text-red-800 text-sm dark:text-red-300'>
-                    {operationStatus.message}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className='flex flex-1 flex-col overflow-hidden'>
-          <div className='flex h-14 flex-none items-center border-b px-6'>
-            <div className='flex gap-2'>
-              <button
-                onClick={() => setActiveTab('active')}
-                className={`rounded-md px-3 py-1 text-sm transition-colors ${
-                  activeTab === 'active'
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-                }`}
-              >
-                Active Webhooks
-              </button>
-              <button
-                onClick={() => setActiveTab('create')}
-                className={`rounded-md px-3 py-1 text-sm transition-colors ${
-                  activeTab === 'create'
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-                }`}
-              >
-                {editingWebhookId ? 'Edit Webhook' : 'Create New'}
-              </button>
             </div>
-          </div>
+          )}
 
-          <div className='flex-1 overflow-y-auto'>
-            <div className='p-6'>
-              {activeTab === 'active' && (
-                <>
+          {/* Scrollable Content */}
+          <div className='scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent min-h-0 flex-1 overflow-y-auto px-6'>
+            <div className='h-full py-2'>
+              {!showForm ? (
+                <div className='space-y-2'>
                   {isLoading ? (
-                    <div className='flex items-center justify-center py-8'>
-                      <RefreshCw className='h-5 w-5 animate-spin text-muted-foreground' />
-                    </div>
-                  ) : webhooks.length === 0 ? (
-                    <div className='flex flex-col items-center justify-center py-12 text-center'>
-                      <Webhook className='h-12 w-12 text-muted-foreground/50' />
-                      <h3 className='mt-4 font-medium text-lg'>No webhooks configured</h3>
-                      <p className='mt-2 max-w-sm text-muted-foreground text-sm'>
-                        Create your first webhook to receive notifications when workflow executions
-                        complete.
-                      </p>
-                      <Button onClick={() => setActiveTab('create')} className='mt-4 gap-2'>
-                        <Plus className='h-4 w-4' />
-                        Create Webhook
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className='space-y-3'>
-                      {webhooks.map((webhook) => (
-                        <div key={webhook.id} className='space-y-2'>
-                          <div className='flex items-center justify-between gap-4 rounded-lg border p-4'>
-                            <div className='flex items-center gap-3'>
-                              <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-muted'>
-                                <Webhook className='h-5 w-5' />
+                    <div className='space-y-2'>
+                      {/* Show 2 skeleton webhooks */}
+                      {[1, 2].map((index) => (
+                        <div key={index} className='flex flex-col gap-2'>
+                          <Skeleton className='h-[14px] w-[65px] rounded-[4px]' />{' '}
+                          {/* WEBHOOK 1/2 label */}
+                          <div className='flex flex-col gap-2'>
+                            <div className='flex items-center justify-between gap-4'>
+                              <div className='flex flex-1 items-center gap-3'>
+                                <Skeleton className='h-8 w-[250px] rounded-[8px]' /> {/* URL */}
                               </div>
-                              <div className='min-w-0'>
-                                <div className='flex items-center gap-2'>
-                                  <span className='truncate font-normal text-sm'>
-                                    {webhook.url}
-                                  </span>
-                                  <span
-                                    className={`h-2 w-2 rounded-full ${
-                                      webhook.active ? 'bg-green-500' : 'bg-gray-400'
-                                    }`}
-                                  />
-                                </div>
-                                <p className='truncate text-muted-foreground text-xs'>
-                                  {webhook.levelFilter.join(', ')} •{' '}
-                                  {webhook.triggerFilter.join(', ')}
-                                </p>
+                              <div className='flex items-center gap-2'>
+                                <Skeleton className='h-9 w-9 rounded-[8px]' /> {/* Test */}
+                                <Skeleton className='h-9 w-9 rounded-[8px]' /> {/* Edit */}
+                                <Skeleton className='h-9 w-9 rounded-[8px]' /> {/* Delete */}
                               </div>
                             </div>
-
-                            <div className='flex gap-1'>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant='ghost'
-                                    size='sm'
-                                    onClick={() => testWebhook(webhook.id)}
-                                    disabled={isTesting === webhook.id}
-                                    className='h-8'
-                                  >
-                                    {isTesting === webhook.id ? (
-                                      <RefreshCw className='h-4 w-4 animate-spin' />
-                                    ) : (
-                                      <Bell className='h-4 w-4' />
-                                    )}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {isTesting === webhook.id ? 'Testing...' : 'Test Webhook'}
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant='ghost'
-                                    size='sm'
-                                    onClick={() => {
-                                      startEditWebhook(webhook)
-                                      setActiveTab('create')
-                                    }}
-                                    className='h-8'
-                                  >
-                                    <Edit2 className='h-4 w-4' />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Edit Webhook</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant='ghost'
-                                    size='sm'
-                                    onClick={() => deleteWebhook(webhook.id)}
-                                    className='h-8 text-muted-foreground hover:text-foreground'
-                                  >
-                                    <Trash2 className='h-4 w-4' />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete Webhook</TooltipContent>
-                              </Tooltip>
+                            <div className='flex flex-wrap items-center gap-2 text-xs'>
+                              {/* Level filters */}
+                              <Skeleton className='h-[22px] w-8 rounded-md' />
+                              <Skeleton className='h-[22px] w-10 rounded-md' />
+                              <Skeleton className='h-1 w-1 rounded-full' /> {/* bullet */}
+                              {/* Trigger filters */}
+                              <Skeleton className='h-[22px] w-6 rounded-md' />
+                              <Skeleton className='h-[22px] w-14 rounded-md' />
+                              <Skeleton className='h-[22px] w-14 rounded-md' />
+                              <Skeleton className='h-[22px] w-12 rounded-md' />
+                              <Skeleton className='h-[22px] w-8 rounded-md' />
+                              <Skeleton className='h-1 w-1 rounded-full' /> {/* bullet */}
+                              {/* Data options */}
+                              <Skeleton className='h-[22px] w-12 rounded-md' />
+                              <Skeleton className='h-[22px] w-10 rounded-md' />
                             </div>
                           </div>
-
-                          {/* Test Status for this specific webhook */}
-                          {testStatus && testStatus.webhookId === webhook.id && (
-                            <div className='ml-4'>
-                              {testStatus.type === 'success' ? (
-                                <div className='rounded-[8px] border border-green-200 bg-green-50 p-3 dark:border-green-800/50 dark:bg-green-950/20'>
-                                  <div className='flex items-start gap-2'>
-                                    <CheckCircle className='mt-0.5 h-3 w-3 shrink-0 text-green-600 dark:text-green-400' />
-                                    <p className='text-green-800 text-xs dark:text-green-300'>
-                                      {testStatus.message}
-                                    </p>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className='rounded-[8px] border border-red-200 bg-red-50 p-3 dark:border-red-800/50 dark:bg-red-950/20'>
-                                  <div className='flex items-start gap-2'>
-                                    <AlertCircle className='mt-0.5 h-3 w-3 shrink-0 text-red-600 dark:text-red-400' />
-                                    <p className='text-red-800 text-xs dark:text-red-300'>
-                                      {testStatus.message}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>
-                  )}
-                </>
-              )}
+                  ) : webhooks.length === 0 ? (
+                    <div className='flex h-full items-center justify-center text-muted-foreground text-sm'>
+                      Click "Add Webhook" below to get started
+                    </div>
+                  ) : (
+                    <>
+                      {filteredWebhooks.map((webhook, index) => (
+                        <div key={webhook.id} className='relative flex flex-col gap-2'>
+                          <Label className='font-normal text-muted-foreground text-xs uppercase'>
+                            Webhook {index + 1}
+                          </Label>
+                          <div className='flex flex-col gap-2'>
+                            <div className='flex items-center justify-between gap-4'>
+                              <div className='flex flex-1 items-center gap-3'>
+                                <div className='flex h-8 items-center rounded-[8px] bg-muted px-3'>
+                                  <code className='font-mono text-foreground text-xs'>
+                                    {webhook.url.length > 40
+                                      ? `${webhook.url.substring(0, 37)}...`
+                                      : webhook.url}
+                                  </code>
+                                </div>
 
-              {activeTab === 'create' && (
-                <>
+                                {/* Test Status inline for this specific webhook */}
+                                {testStatus &&
+                                  testStatus.webhookId === webhook.id &&
+                                  testStatus.type === 'error' && (
+                                    <div className='flex items-center gap-2 text-red-600 text-xs dark:text-red-400'>
+                                      <AlertCircle className='h-3 w-3 flex-shrink-0' />
+                                      <span>{testStatus.message}</span>
+                                    </div>
+                                  )}
+                              </div>
+
+                              <div className='flex items-center gap-2'>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant='ghost'
+                                      size='icon'
+                                      onClick={() => testWebhook(webhook.id)}
+                                      disabled={isTesting === webhook.id}
+                                      className='h-9 w-9 rounded-[8px] border bg-background p-0 text-muted-foreground shadow-xs hover:bg-muted'
+                                    >
+                                      <RefreshCw
+                                        className={cn(
+                                          'h-4 w-4',
+                                          isTesting === webhook.id && 'animate-spin'
+                                        )}
+                                      />
+                                      <span className='sr-only'>Test webhook</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Test</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant='ghost'
+                                      size='icon'
+                                      onClick={() => startEditWebhook(webhook)}
+                                      className='h-9 w-9 rounded-[8px] border bg-background p-0 text-muted-foreground shadow-xs hover:bg-muted'
+                                    >
+                                      <Pencil className='h-4 w-4' />
+                                      <span className='sr-only'>Edit webhook</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Edit</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant='ghost'
+                                      size='icon'
+                                      onClick={() => deleteWebhook(webhook.id)}
+                                      className='h-9 w-9 rounded-[8px] border bg-background p-0 text-muted-foreground shadow-xs transition-all duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white'
+                                    >
+                                      <Trash2 className='h-4 w-4' />
+                                      <span className='sr-only'>Delete webhook</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Delete</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </div>
+
+                            <div className='flex flex-wrap items-center gap-2 text-xs'>
+                              {webhook.levelFilter.map((level) => (
+                                <span key={level} className='rounded-md bg-muted px-1.5 py-0.5'>
+                                  {level}
+                                </span>
+                              ))}
+                              <span className='text-muted-foreground'>•</span>
+                              {webhook.triggerFilter.map((trigger) => (
+                                <span key={trigger} className='rounded-md bg-muted px-1.5 py-0.5'>
+                                  {trigger}
+                                </span>
+                              ))}
+                              {(webhook.includeFinalOutput ||
+                                webhook.includeTraceSpans ||
+                                webhook.includeRateLimits ||
+                                webhook.includeUsageData) && (
+                                <>
+                                  <span className='text-muted-foreground'>•</span>
+                                  {webhook.includeFinalOutput && (
+                                    <span className='rounded-md bg-muted px-1.5 py-0.5'>
+                                      output
+                                    </span>
+                                  )}
+                                  {webhook.includeTraceSpans && (
+                                    <span className='rounded-md bg-muted px-1.5 py-0.5'>
+                                      traces
+                                    </span>
+                                  )}
+                                  {webhook.includeRateLimits && (
+                                    <span className='rounded-md bg-muted px-1.5 py-0.5'>
+                                      limits
+                                    </span>
+                                  )}
+                                  {webhook.includeUsageData && (
+                                    <span className='rounded-md bg-muted px-1.5 py-0.5'>usage</span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {/* Show message when search has no results but there are webhooks */}
+                      {searchTerm.trim() &&
+                        filteredWebhooks.length === 0 &&
+                        webhooks.length > 0 && (
+                          <div className='py-8 text-center text-muted-foreground text-sm'>
+                            No webhooks found matching "{searchTerm}"
+                          </div>
+                        )}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className='flex flex-col gap-4 pt-1'>
+                  {/* Form Header */}
+                  <div>
+                    <h3 className='font-medium text-base'>
+                      {editingWebhookId ? 'Edit Webhook' : 'Create New Webhook'}
+                    </h3>
+                    <p className='text-muted-foreground text-sm'>
+                      Configure webhook notifications for workflow executions
+                    </p>
+                  </div>
+
                   {/* General errors */}
                   {fieldErrors.general && fieldErrors.general.length > 0 && (
-                    <div className='mb-4 rounded-[8px] border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-950/20'>
+                    <div className='rounded-[8px] border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-950/20'>
                       <div className='flex items-start gap-2'>
                         <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400' />
                         <div className='space-y-1 text-red-800 text-sm dark:text-red-300'>
@@ -663,7 +664,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                     </div>
                   )}
 
-                  <div className='space-y-6'>
+                  <div className='flex flex-col gap-6'>
                     <div className='space-y-2'>
                       <Label htmlFor='url' className='font-medium text-sm'>
                         Webhook URL
@@ -677,7 +678,7 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           setNewWebhook({ ...newWebhook, url: e.target.value })
                           setFieldErrors({ ...fieldErrors, url: undefined })
                         }}
-                        className='h-9'
+                        className='h-9 rounded-[8px]'
                         autoComplete='off'
                         autoCorrect='off'
                         autoCapitalize='off'
@@ -710,14 +711,14 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                             setNewWebhook({ ...newWebhook, secret: e.target.value })
                             setFieldErrors({ ...fieldErrors, general: undefined })
                           }}
-                          className='h-9 pr-28'
+                          className='h-9 rounded-[8px] pr-28'
                           autoComplete='new-password'
                           autoCorrect='off'
                           autoCapitalize='off'
                           spellCheck='false'
                           data-form-type='other'
                         />
-                        <div className='absolute top-0 right-0 flex h-9'>
+                        <div className='absolute top-0 right-0 flex h-9 pr-1'>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -784,36 +785,36 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                     </div>
 
                     <div className='space-y-3'>
-                      <Label className='font-medium text-sm'>Filter by Level</Label>
-                      <div className='flex gap-2'>
+                      <Label className='font-medium text-sm'>Log Level Filters</Label>
+                      <div className='space-y-3'>
                         {(['info', 'error'] as NotificationLogLevel[]).map((level) => (
-                          <Button
-                            key={level}
-                            variant={newWebhook.levelFilter.includes(level) ? 'default' : 'outline'}
-                            size='sm'
-                            onClick={() => {
-                              if (newWebhook.levelFilter.includes(level)) {
-                                setNewWebhook({
-                                  ...newWebhook,
-                                  levelFilter: newWebhook.levelFilter.filter((l) => l !== level),
-                                })
-                              } else {
-                                setNewWebhook({
-                                  ...newWebhook,
-                                  levelFilter: [...newWebhook.levelFilter, level],
-                                })
-                              }
-                              setFieldErrors({ ...fieldErrors, levelFilter: undefined })
-                            }}
-                            className='h-8 capitalize'
-                          >
-                            {level}
-                          </Button>
+                          <div key={level} className='flex items-center justify-between'>
+                            <div className='flex flex-col'>
+                              <Label className='font-normal text-sm capitalize'>{level} logs</Label>
+                              <p className='text-muted-foreground text-xs'>
+                                Receive notifications for {level} level logs
+                              </p>
+                            </div>
+                            <Switch
+                              checked={newWebhook.levelFilter.includes(level)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setNewWebhook({
+                                    ...newWebhook,
+                                    levelFilter: [...newWebhook.levelFilter, level],
+                                  })
+                                } else {
+                                  setNewWebhook({
+                                    ...newWebhook,
+                                    levelFilter: newWebhook.levelFilter.filter((l) => l !== level),
+                                  })
+                                }
+                                setFieldErrors({ ...fieldErrors, levelFilter: undefined })
+                              }}
+                            />
+                          </div>
                         ))}
                       </div>
-                      <p className='text-muted-foreground text-xs'>
-                        Select which log levels trigger webhook notifications
-                      </p>
                       {fieldErrors.levelFilter && fieldErrors.levelFilter.length > 0 && (
                         <div className='mt-1 space-y-1 text-red-400 text-xs dark:text-red-400'>
                           {fieldErrors.levelFilter.map((error, index) => (
@@ -824,42 +825,42 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                     </div>
 
                     <div className='space-y-3'>
-                      <Label className='font-medium text-sm'>Filter by Trigger</Label>
-                      <div className='flex flex-wrap gap-2'>
+                      <Label className='font-medium text-sm'>Trigger Type Filters</Label>
+                      <div className='space-y-3'>
                         {(
                           ['api', 'webhook', 'schedule', 'manual', 'chat'] as NotificationTrigger[]
                         ).map((trigger) => (
-                          <Button
-                            key={trigger}
-                            variant={
-                              newWebhook.triggerFilter.includes(trigger) ? 'default' : 'outline'
-                            }
-                            size='sm'
-                            onClick={() => {
-                              if (newWebhook.triggerFilter.includes(trigger)) {
-                                setNewWebhook({
-                                  ...newWebhook,
-                                  triggerFilter: newWebhook.triggerFilter.filter(
-                                    (t) => t !== trigger
-                                  ),
-                                })
-                              } else {
-                                setNewWebhook({
-                                  ...newWebhook,
-                                  triggerFilter: [...newWebhook.triggerFilter, trigger],
-                                })
-                              }
-                              setFieldErrors({ ...fieldErrors, triggerFilter: undefined })
-                            }}
-                            className='h-8 capitalize'
-                          >
-                            {trigger}
-                          </Button>
+                          <div key={trigger} className='flex items-center justify-between'>
+                            <div className='flex flex-col'>
+                              <Label className='font-normal text-sm capitalize'>
+                                {trigger} triggers
+                              </Label>
+                              <p className='text-muted-foreground text-xs'>
+                                Notify when workflow is triggered via {trigger}
+                              </p>
+                            </div>
+                            <Switch
+                              checked={newWebhook.triggerFilter.includes(trigger)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setNewWebhook({
+                                    ...newWebhook,
+                                    triggerFilter: [...newWebhook.triggerFilter, trigger],
+                                  })
+                                } else {
+                                  setNewWebhook({
+                                    ...newWebhook,
+                                    triggerFilter: newWebhook.triggerFilter.filter(
+                                      (t) => t !== trigger
+                                    ),
+                                  })
+                                }
+                                setFieldErrors({ ...fieldErrors, triggerFilter: undefined })
+                              }}
+                            />
+                          </div>
                         ))}
                       </div>
-                      <p className='text-muted-foreground text-xs'>
-                        Select which triggers should send webhook notifications
-                      </p>
                       {fieldErrors.triggerFilter && fieldErrors.triggerFilter.length > 0 && (
                         <div className='mt-1 space-y-1 text-red-400 text-xs dark:text-red-400'>
                           {fieldErrors.triggerFilter.map((error, index) => (
@@ -929,56 +930,68 @@ export function WebhookSettings({ workflowId, open, onOpenChange }: WebhookSetti
                           />
                         </div>
                       </div>
-                      <p className='mt-3 text-muted-foreground text-xs'>
+                      <p className='mt-3 pb-2 text-muted-foreground text-xs'>
                         By default, only basic metadata and cost information is included
                       </p>
                     </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {activeTab === 'create' && (
-          <div className='flex flex-shrink-0 justify-between border-t px-6 py-4'>
-            <Button variant='outline' onClick={handleCloseModal}>
-              Cancel
-            </Button>
-
-            <Button
-              onClick={editingWebhookId ? updateWebhook : createWebhook}
-              disabled={
-                isCreating ||
-                !newWebhook.url ||
-                newWebhook.levelFilter.length === 0 ||
-                newWebhook.triggerFilter.length === 0
-              }
-              className='gap-2 bg-[var(--brand-primary-hover-hex)] font-medium text-white shadow-[0_0_0_0_var(--brand-primary-hover-hex)] transition-all duration-200 hover:bg-[var(--brand-primary-hover-hex)] hover:shadow-[0_0_0_4px_rgba(127,47,255,0.15)] disabled:opacity-50 disabled:hover:bg-[var(--brand-primary-hover-hex)] disabled:hover:shadow-none'
-            >
-              {isCreating ? (
-                <>
-                  <RefreshCw className='mr-2 h-4 w-4 animate-spin' />
-                  {editingWebhookId ? 'Updating...' : 'Creating...'}
-                </>
-              ) : (
-                <>
-                  {editingWebhookId ? (
+        {/* Footer */}
+        <div className='flex-shrink-0 bg-background'>
+          <div className='flex w-full items-center justify-between border-t px-6 py-4'>
+            {showForm ? (
+              <>
+                <Button variant='outline' onClick={cancelEdit} className='h-9 rounded-[8px]'>
+                  Back
+                </Button>
+                <Button
+                  onClick={editingWebhookId ? updateWebhook : createWebhook}
+                  disabled={
+                    isCreating ||
+                    !newWebhook.url ||
+                    newWebhook.levelFilter.length === 0 ||
+                    newWebhook.triggerFilter.length === 0
+                  }
+                  className='h-9 rounded-[8px]'
+                >
+                  {isCreating ? (
                     <>
-                      <Edit2 className='mr-2 h-4 w-4' />
-                      Update Webhook
+                      <RefreshCw className='h-4 w-4 animate-spin' />
+                      {editingWebhookId ? 'Updating...' : 'Creating...'}
                     </>
                   ) : (
-                    <>
-                      <Plus className='mr-2 h-4 w-4' />
-                      Create Webhook
-                    </>
+                    <>{editingWebhookId ? 'Update Webhook' : 'Create Webhook'}</>
                   )}
-                </>
-              )}
-            </Button>
+                </Button>
+              </>
+            ) : isLoading ? (
+              <>
+                <Skeleton className='h-9 w-[117px] rounded-[8px]' />
+                <div />
+              </>
+            ) : (
+              <>
+                <Button
+                  onClick={() => {
+                    setSearchTerm('')
+                    setShowForm(true)
+                  }}
+                  variant='ghost'
+                  className='h-9 rounded-[8px] border bg-background px-3 shadow-xs hover:bg-muted focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0'
+                >
+                  <Plus className='h-4 w-4 stroke-[2px]' />
+                  Add Webhook
+                </Button>
+                <div />
+              </>
+            )}
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   )
