@@ -426,6 +426,7 @@ export function TriggerConfig({
           onDelete={handleDeleteTrigger}
           triggerId={triggerId || undefined}
           blockId={blockId}
+          workflowId={workflowId}
         />
       )}
     </div>
