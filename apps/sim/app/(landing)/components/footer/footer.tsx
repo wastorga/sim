@@ -91,11 +91,21 @@ const tools = [
   'YouTube',
 ]
 
-export default function Footer() {
+interface FooterProps {
+  fullWidth?: boolean
+}
+
+export default function Footer({ fullWidth = false }: FooterProps) {
   return (
     <footer className={`${inter.className} relative w-full overflow-hidden bg-white`}>
-      <div className='px-4 pt-[40px] pb-[40px] sm:px-[50px] sm:pt-[34px] sm:pb-[340px]'>
-        <div className='flex gap-[80px]'>
+      <div
+        className={
+          fullWidth
+            ? 'px-4 pt-[40px] pb-[40px] sm:px-4 sm:pt-[34px] sm:pb-[340px]'
+            : 'px-4 pt-[40px] pb-[40px] sm:px-[50px] sm:pt-[34px] sm:pb-[340px]'
+        }
+      >
+        <div className={`flex gap-[80px] ${fullWidth ? 'justify-center' : ''}`}>
           {/* Logo and social links */}
           <div className='flex flex-col gap-[24px]'>
             <Link href='/' aria-label='Sim home'>
@@ -195,7 +205,7 @@ export default function Footer() {
                 Pricing
               </Link>
               <Link
-                href='/enterprise'
+                href='https://form.typeform.com/to/jqCO12pF'
                 target='_blank'
                 rel='noopener noreferrer'
                 className='text-[14px] text-muted-foreground transition-colors hover:text-foreground'
