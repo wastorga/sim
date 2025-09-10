@@ -1,97 +1,16 @@
 #!/usr/bin/env bun
 
-import { eq, sql } from 'drizzle-orm'
-import type { Edge } from 'reactflow'
+import { sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db'
-import {
-  workflow,
-  workflowBlocks,
-  workflowDeploymentVersion,
-  workflowEdges,
-  workflowSubflows,
-} from '../db/schema'
-import type { BlockState, Loop, Parallel, WorkflowState } from '../stores/workflows/workflow/types'
+import { workflow, workflowDeploymentVersion } from '../db/schema'
+import { loadWorkflowFromNormalizedTables as loadNormalizedWorkflow } from '../lib/workflows/db-helpers'
+import type { WorkflowState } from '../stores/workflows/workflow/types'
 
 const DRY_RUN = process.argv.includes('--dry-run')
 const BATCH_SIZE = 50
 
-async function loadWorkflowFromNormalizedTables(workflowId: string): Promise<WorkflowState | null> {
-  try {
-    const [blocks, edges, subflows] = await Promise.all([
-      db.select().from(workflowBlocks).where(eq(workflowBlocks.workflowId, workflowId)),
-      db.select().from(workflowEdges).where(eq(workflowEdges.workflowId, workflowId)),
-      db.select().from(workflowSubflows).where(eq(workflowSubflows.workflowId, workflowId)),
-    ])
-
-    const blocksMap: Record<string, BlockState> = {}
-    const loops: Record<string, Loop> = {}
-    const parallels: Record<string, Parallel> = {}
-
-    for (const block of blocks) {
-      blocksMap[block.id] = {
-        id: block.id,
-        type: block.type,
-        name: block.name,
-        position: {
-          x: Number.parseFloat(block.positionX),
-          y: Number.parseFloat(block.positionY),
-        },
-        data: block.data || {},
-        subBlocks: block.subBlocks || {}, // CRITICAL: This contains system prompts and other subblock values!
-        outputs: block.outputs || {},
-        enabled: block.enabled,
-        horizontalHandles: block.horizontalHandles,
-        isWide: block.isWide,
-        advancedMode: block.advancedMode,
-        triggerMode: block.triggerMode,
-        height: Number.parseFloat(block.height),
-      } as BlockState
-    }
-
-    for (const subflow of subflows) {
-      // Subflows are stored differently - they represent loops and parallels
-      // We need to associate them with their parent blocks
-      if (subflow.type === 'loop' && subflow.config) {
-        loops[subflow.id] = {
-          nodes: (subflow.config as any).nodes || [],
-          iterations: (subflow.config as any).iterations || 1,
-          loopType: (subflow.config as any).loopType || 'sequential',
-          forEachItems: (subflow.config as any).forEachItems || '',
-          ...((subflow.config as any) || {}),
-        }
-      } else if (subflow.type === 'parallel' && subflow.config) {
-        parallels[subflow.id] = {
-          nodes: (subflow.config as any).nodes || [],
-          count: (subflow.config as any).count || 1,
-          distribution: (subflow.config as any).distribution || 'even',
-          parallelType: (subflow.config as any).parallelType || 'static',
-          ...((subflow.config as any) || {}),
-        }
-      }
-    }
-
-    const edgesArray: Edge[] = edges.map((edge) => ({
-      id: edge.id,
-      source: edge.sourceBlockId,
-      target: edge.targetBlockId,
-      sourceHandle: edge.sourceHandle || undefined,
-      targetHandle: edge.targetHandle || undefined,
-      type: 'default',
-      data: {},
-    }))
-
-    return {
-      blocks: blocksMap,
-      edges: edgesArray,
-      loops,
-      parallels,
-    }
-  } catch (error) {
-    console.error(`Failed to load workflow ${workflowId} from normalized tables:`, error)
-    return null
-  }
-}
+// Use centralized normalization logic from lib/workflows/db-helpers
 
 async function migrateWorkflows() {
   console.log('Starting deployment version migration...')
@@ -154,8 +73,14 @@ async function migrateWorkflows() {
           console.log(`  [DEPLOYED] ${wf.id} (${wf.name}) - using existing deployedState`)
         } else {
           // Load from normalized tables for all workflows without deployedState
-          state = await loadWorkflowFromNormalizedTables(wf.id)
-          if (state) {
+          const normalized = await loadNormalizedWorkflow(wf.id)
+          if (normalized) {
+            state = {
+              blocks: normalized.blocks,
+              edges: normalized.edges,
+              loops: normalized.loops,
+              parallels: normalized.parallels,
+            } as WorkflowState
             console.log(
               `  [NORMALIZED] ${wf.id} (${wf.name}) - loaded from normalized tables (was deployed: ${wf.isDeployed})`
             )
