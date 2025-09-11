@@ -65,7 +65,7 @@ export function TriggerModal({
   // Track if config has changed from initial snapshot
   const hasConfigChanged = useMemo(() => {
     return JSON.stringify(config) !== JSON.stringify(initialConfigRef.current)
-  }, [config])
+  }, [config, initialConfigRef.current])
 
   // Track if credential has changed from initial snapshot (computed later once selectedCredentialId is declared)
   let hasCredentialChanged = false
@@ -281,6 +281,8 @@ export function TriggerModal({
 
       const success = await onSave(path || '', config)
       if (success) {
+        initialConfigRef.current = JSON.parse(JSON.stringify(config))
+        initialCredentialRef.current = selectedCredentialId
         if (triggerDef.requiresCredentials && !triggerDef.webhook) {
           setIsSaving(false)
           handleClose()
