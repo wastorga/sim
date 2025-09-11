@@ -176,8 +176,16 @@ export function WorkflowBlock({ id, data }: NodeProps<WorkflowBlockProps>) {
   }, [currentWorkflow.isDiffMode, id])
 
   const displayIsWide = currentWorkflow.isDiffMode ? diffIsWide : isWide
-  const displayAdvancedMode = currentWorkflow.isDiffMode ? diffAdvancedMode : blockAdvancedMode
-  const displayTriggerMode = currentWorkflow.isDiffMode ? diffTriggerMode : blockTriggerMode
+  const displayAdvancedMode = currentWorkflow.isDiffMode
+    ? diffAdvancedMode
+    : data.isPreview
+      ? (data.blockState?.advancedMode ?? false)
+      : blockAdvancedMode
+  const displayTriggerMode = currentWorkflow.isDiffMode
+    ? diffTriggerMode
+    : data.isPreview
+      ? (data.blockState?.triggerMode ?? false)
+      : blockTriggerMode
 
   // Collaborative workflow actions
   const {
@@ -440,10 +448,8 @@ export function WorkflowBlock({ id, data }: NodeProps<WorkflowBlockProps>) {
       stateToUse = mergedState?.subBlocks || {}
     }
 
-    const isAdvancedMode = useWorkflowStore.getState().blocks[blockId]?.advancedMode ?? false
-    const isTriggerMode = useWorkflowStore.getState().blocks[blockId]?.triggerMode ?? false
-    const effectiveAdvanced = currentWorkflow.isDiffMode ? displayAdvancedMode : isAdvancedMode
-    const effectiveTrigger = currentWorkflow.isDiffMode ? displayTriggerMode : isTriggerMode
+    const effectiveAdvanced = displayAdvancedMode
+    const effectiveTrigger = displayTriggerMode
     const e2bClientEnabled = isTruthy(getEnv('NEXT_PUBLIC_E2B_ENABLED'))
 
     // Filter visible blocks and those that meet their conditions
@@ -693,7 +699,7 @@ export function WorkflowBlock({ id, data }: NodeProps<WorkflowBlockProps>) {
 
         <ActionBar blockId={id} blockType={type} disabled={!userPermissions.canEdit} />
         {/* Connection Blocks - Don't show for trigger blocks, starter blocks, or blocks in trigger mode */}
-        {config.category !== 'triggers' && type !== 'starter' && !blockTriggerMode && (
+        {config.category !== 'triggers' && type !== 'starter' && !displayTriggerMode && (
           <ConnectionBlocks
             blockId={id}
             setIsConnecting={setIsConnecting}
@@ -703,7 +709,7 @@ export function WorkflowBlock({ id, data }: NodeProps<WorkflowBlockProps>) {
         )}
 
         {/* Input Handle - Don't show for trigger blocks, starter blocks, or blocks in trigger mode */}
-        {config.category !== 'triggers' && type !== 'starter' && !blockTriggerMode && (
+        {config.category !== 'triggers' && type !== 'starter' && !displayTriggerMode && (
           <Handle
             type='target'
             position={horizontalHandles ? Position.Left : Position.Top}
@@ -1146,7 +1152,7 @@ export function WorkflowBlock({ id, data }: NodeProps<WorkflowBlockProps>) {
             />
 
             {/* Error Handle - Don't show for trigger blocks, starter blocks, or blocks in trigger mode */}
-            {config.category !== 'triggers' && type !== 'starter' && !blockTriggerMode && (
+            {config.category !== 'triggers' && type !== 'starter' && !displayTriggerMode && (
               <Handle
                 type='source'
                 position={horizontalHandles ? Position.Right : Position.Bottom}
