@@ -27,6 +27,7 @@
     "knowledge",
     "linear",
     "linkup",
+    "mcp",
     "mem0",
     "memory",
     "microsoft_excel",
@@ -61,11 +62,11 @@
     "typeform",
     "vision",
     "wealthbox",
+    "webex",
     "webhook",
     "whatsapp",
     "wikipedia",
     "x",
     "youtube"
-  ],
-  "defaultOpen": false
+  ]
 }
